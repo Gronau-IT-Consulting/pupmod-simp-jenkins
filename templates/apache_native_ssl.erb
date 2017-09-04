@@ -20,7 +20,7 @@ ProxyPass /jenkins http://localhost:<%= @jenkins_proxy_port %>/jenkins/
   RequestHeader set X-Client-DN %{SSL_CLIENT_S_DN}e
   RequestHeader set X-Client-Verify %{SSL_CLIENT_VERIFY}e
 
-  ProxyPassReverse /
+  ProxyPassReverse /jenkins/
   Order deny,allow
   Allow from all
   Header edit location ^http://(.*):<%= @jenkins_port %>/jenkins/? https://$1:<%= @jenkins_port %>/jenkins/

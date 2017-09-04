@@ -77,9 +77,6 @@
 #   server since they are probably security relevant. However, if this is not
 #   the case, simply change the facility here.)
 #
-# @param enable_external_yumrepo
-#   Set this to true to point to the public yum repo for Jenkins.
-#
 # @param ldap
 #   Whether or not to use LDAP as your authentication backend.
 #
@@ -152,6 +149,12 @@
 # @param app_pki_ca_dir
 #   Path to the CA.
 #
+# @param java_package
+#   Name of the java package to install
+#
+# @param servername
+#   Externally visible server name for jenkins (used in redirects)
+#
 # @author Trevor Vaughan <tvaughan@onyxpoint.com>
 #
 class jenkins (
@@ -180,7 +183,6 @@ class jenkins (
   Stdlib::AbsolutePath          $app_pki_key             = "${app_pki_dir}/private/${facts['fqdn']}.pem",
   Stdlib::AbsolutePath          $app_pki_ca_dir          = "${app_pki_dir}/cacerts",
   String                        $logfacility               = 'local6',
-  Boolean                       $enable_external_yumrepo   = false,
   Boolean                       $ldap                      = simplib::lookup('simp_options::ldap', { 'default_value' => false }),
   Array[String]                 $ldap_uri                  = simplib::lookup('simp_options::ldap::uri', { 'default_value' => ["ldap://%{hiera('simp_options::puppet::server')}"]}),
   String                        $ldap_base_dn              = simplib::lookup('simp_options::ldap::base_dn'),
@@ -191,7 +193,9 @@ class jenkins (
   Optional[String]              $default_ldap_admin        = undef,
   Boolean                       $allow_anonymous_read      = true,
   Boolean                       $allow_signup              = false,
-  Boolean                       $firewall                  = simplib::lookup('simp_options::firewall', { 'default_value' => false})
+  Boolean                       $firewall                  = simplib::lookup('simp_options::firewall', { 'default_value' => false}),
+  String $java_package                                     = 'java-1.8.0-openjdk',
+  String $servername                                       = "${facts['fqdn']}"
 ) {
 
   if $ldap and !$default_ldap_admin {
@@ -232,11 +236,11 @@ class jenkins (
                 for file in ${app_pki_ca_dir}/*.pem; do \
                   /usr/bin/keytool -import -keystore ${l_jenkins_keystore} -trustcacerts -noprompt -alias `/bin/basename \$file` -file \$file -storepass ${l_jenkins_pass}; \
                 done; \
-                chmod 640 ${l_jenkins_keystore}; \
+                chmod 644 ${l_jenkins_keystore}; \
                 chown root.jenkins ${l_jenkins_keystore}",
     refreshonly => true,
     require     => [
-      Package['java-1.6.0-openjdk'],
+      Package[$java_package],
       Package['jenkins']
     ],
     notify      => Service['jenkins']
@@ -246,7 +250,7 @@ class jenkins (
     ensure => 'file',
     owner  => 'root',
     group  => 'jenkins',
-    mode   => '0640',
+    mode   => '0644',
     notify => Exec['build_jenkins_keystore']
   }
 
@@ -254,24 +258,26 @@ class jenkins (
     ensure  => 'directory',
     owner   => 'jenkins',
     group   => 'jenkins',
-    mode    => '0640',
+    mode    => '0755',
     require => Package['jenkins']
   }
 
-  file { '/var/lib/jenkins/users/dont_panic':
-    ensure => 'directory',
-    owner  => 'jenkins',
-    group  => 'jenkins',
-    mode   => '0640'
-  }
+  if !$ldap {
+    file { '/var/lib/jenkins/users/dont_panic':
+      ensure => 'directory',
+      owner  => 'jenkins',
+      group  => 'jenkins',
+      mode   => '0755'
+    }
 
-  file { '/var/lib/jenkins/users/dont_panic/config.xml':
-    ensure  => 'file',
-    owner   => 'jenkins',
-    group   => 'jenkins',
-    mode    => '0640',
-    content => template('jenkins/dont_panic.xml.erb'),
-    notify  => Service['jenkins']
+    file { '/var/lib/jenkins/users/dont_panic/config.xml':
+      ensure  => 'file',
+      owner   => 'jenkins',
+      group   => 'jenkins',
+      mode    => '0644',
+      content => template('jenkins/dont_panic.xml.erb'),
+      notify  => Service['jenkins']
+    }
   }
 
   file { '/var/log/jenkins/jenkins.log' :
@@ -305,7 +311,7 @@ class jenkins (
       ensure => 'directory',
       owner  => 'jenkins',
       group  => 'jenkins',
-      mode   => '0640'
+      mode   => '0750'
     }
 
     # If this is not '/tmp'
@@ -314,7 +320,7 @@ class jenkins (
         ensure => 'directory',
         owner  => 'jenkins',
         group  => 'jenkins',
-        mode   => '0640',
+        mode   => '0750',
         notify => File['/var/lib/jenkins/config.xml']
       }
     }
@@ -328,10 +334,50 @@ class jenkins (
       ensure  => 'file',
       owner   => 'jenkins',
       group   => 'jenkins',
-      mode    => '0640',
+      mode    => '0644',
       replace => false,
       content => $_config_content,
       require => Package['jenkins'],
+      notify  => Service['jenkins']
+    }
+
+    file { '/var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml':
+      ensure  => 'file',
+      owner   => 'jenkins',
+      group   => 'jenkins',
+      mode    => '0644',
+      replace => false,
+      content => template('jenkins/jenkins.model.JenkinsLocationConfiguration.xml.erb'),
+      require => Package['jenkins'],
+      notify  => Service['jenkins']
+    }
+
+    file { '/var/lib/jenkins/jenkins.CLI.xml':
+      ensure  => 'file',
+      owner   => 'jenkins',
+      group   => 'jenkins',
+      mode    => '0644',
+      replace => false,
+      content => template('jenkins/jenkins.CLI.xml.erb'),
+      require => Package['jenkins'],
+      notify  => Service['jenkins']
+    }
+
+    file { '/var/lib/jenkins/secrets':
+      ensure  => 'directory',
+      owner   => 'jenkins',
+      group   => 'jenkins',
+      mode    => '0755',
+      require => Package['jenkins']
+    }
+
+    file { '/var/lib/jenkins/secrets/slave-to-master-security-kill-switch':
+      ensure  => 'file',
+      owner   => 'jenkins',
+      group   => 'jenkins',
+      mode    => '0644',
+      replace => false,
+      content => 'false',
       notify  => Service['jenkins']
     }
 
@@ -343,21 +389,6 @@ class jenkins (
         trusted_nets => $trusted_nets,
         dports       => $jenkins_port
       }
-    }
-
-    $_jenkins_enabled = $enable_external_yumrepo ? {
-      true  => 1,
-      false => 0
-    }
-    yumrepo { 'jenkins':
-      baseurl         => 'http://pkg.jenkins-ci.org/redhat/',
-      descr           => 'Jenkins Repository',
-      enabled         => $_jenkins_enabled,
-      gpgcheck        => 1,
-      gpgkey          => 'http://pkg.jenkins-ci.org/redhat/jenkins-ci.org.key',
-      keepalive       => 0,
-      metadata_expire => '3600',
-      require         => Package['jenkins']
     }
   }
 }

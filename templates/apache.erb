@@ -11,7 +11,7 @@ Listen <%= @jenkins_port %>
   Proxypass /jenkins/ http://localhost:8081/jenkins/
   Proxypass /jenkins http://localhost:8081/jenkins/
   <Location /jenkins/>
-    ProxyPassReverse /
+    ProxyPassReverse /jenkins/
     Order deny,allow
     Allow from all
   </Location>

@@ -12,3 +12,19 @@ Please read our [Contribution Guide](https://simp-project.atlassian.net/wiki/dis
 Please excuse us as we transition this code into the public domain.
 
 Downloads, discussion, and patches are still welcome!
+
+## Note about Plugins
+
+When using the default LDAP integration, the following plugins are required:
+
+- [display-url-api](https://plugins.jenkins.io/display-url-api)
+- [icon-shim](https://plugins.jenkins.io/icon-shim)
+- [junit](https://plugins.jenkins.io/junit)
+- [ldap](https://plugins.jenkins.io/ldap)
+- [mailer](https://plugins.jenkins.io/mailer)
+- [matrix-auth](https://plugins.jenkins.io/matrix-auth)
+- [matrix-project](https://plugins.jenkins.io/matrix-project)
+- [script-security](https://plugins.jenkins.io/script-security)
+- [structs](https://plugins.jenkins.io/structs)
+
+For the default jenkins::rsync\_plugins setting the .hpi files should be stored in /var/simp/environments/simp/rsync/Global/jenkins_plugins with uid/gid set to 419.
